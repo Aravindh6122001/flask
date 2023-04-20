@@ -42,7 +42,9 @@ def login():
           'username' : required_data['username'],
           'password' : required_data['password'],
           'email' : required_data['email']
-       }       
+       }  
+       
+            
             
        cursor.execute('SELECT * FROM users WHERE (username,email) = (%s,%s)', (new_data['username'],new_data['email'],))
        account = cursor.fetchone()
