@@ -19,7 +19,7 @@ DB_PASS = os.getenv("DB_PASS")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("key")
-# JWT_SECRET_KEY = 'JWT_SECRET_KEY'
+JWT_SECRET_KEY = 'JWT_SECRET_KEY'
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
 JWTManager(app)
  
@@ -43,9 +43,7 @@ def login():
           'password' : required_data['password'],
           'email' : required_data['email']
        }  
-       
-            
-            
+              
        cursor.execute('SELECT * FROM users WHERE (username,email) = (%s,%s)', (new_data['username'],new_data['email'],))
        account = cursor.fetchone()
        
@@ -118,46 +116,53 @@ def register():
     
     return jsonify ({"message": "New user added successfully."})
 
-
-@app.route('/users/<int:user_id>', methods=["GET"]) #dispaly users data by comparing two tables
-# @jwt_required()
-def user(user_id):
+@app.route('/users/<int:id>', methods=["GET"])
+def user_details(id):
+    
     if request.method == "GET":
+        cursor.execute("SELECT u.id, u.username, u.email, u.role_, m.manager_id, m.username FROM users u INNER JOIN users m ON u.manager_id = m.id WHERE u.id = %s",(id,))
+        user = cursor.fetchone()
         
-        cursor.execute("SELECT u.id, u.username, u.email, u.role_, a.admin_name FROM users u JOIN admin a ON u.id = a.admin_id WHERE u.id = %s;",(user_id,))
-        account = cursor.fetchone()
-
-        if account:
-            required_data = {
-                "id": account[0], 
-                "username": account[1], 
-                "email": account[2], 
-                "role": account[3], 
-                "admin_name": account[4]
+        required_data = {
+                "id": user[0], 
+                "username": user[1], 
+                "email": user[2], 
+                "role": user[3], 
+                "manager_id": user[4],
+                "manager_name": user[5]
                 }
-            return jsonify({"id-info": required_data})
-        else:
-            return jsonify({"message": "User not found"}), 404
+        
+        return jsonify(required_data)
+    
+    else:
+        return("Invalid Request method")
 
-
-@app.route('/display', methods=['GET']) #will display all details based on the role you search eg."role" : "manager" then all managers respective details will be shown
+            
+@app.route('/display', methods=['GET']) #will display all employees under a manager and details based on the role you search eg."role" : "manager" then all managers respective details will be shown
 def display():
     required_data = request.get_json()
     
-    new_data = {
-        'role': required_data.get('role')
-    } 
+    if 'id' in required_data and required_data['id']:
+        new_data = {
+            'id': required_data['id']
+        } 
+        cursor.execute("SELECT * FROM users WHERE manager_id = %s", (new_data['id'],))
 
-    cursor.execute("SELECT username, email, role_, manager_id FROM users WHERE role_ = %s", (new_data['role'],))
+    if 'role' in required_data and required_data['role']:
+          new_data = {
+            'role': required_data['role']
+          } 
+          cursor.execute("SELECT * FROM users WHERE role_ = %s", (new_data['role'],))
+ 
     accounts = cursor.fetchall()
 
     results = []
     for account in accounts:
         result = {
-            "username": account[0], 
-            "email": account[1],
-            "role": account[2],
-            "manager_id": account[3]
+            "username": account['username'], 
+            "email": account['email'],
+            "role": account['role_'],
+            "manager_id": account['manager_id']
         }
         results.append(result)
 
@@ -183,12 +188,15 @@ def update():
     
     if request.method == "PATCH": # only admin can update users reporting manager and change his role
         new_data = {
+            'id' : required_data['id'],
             'username': required_data['username'],
             'role':required_data['role'],
             'manager_id':required_data['manager_id']
             }
         
-        cursor.execute("UPDATE users SET manager_id = %s WHERE username = %s AND role_= %s",(new_data['manager_id'],new_data['username'],new_data['role']))
+        cursor.execute("UPDATE users SET role_ = %s WHERE username = %s AND manager_id = %s",(new_data['role'],new_data['username'],new_data['manager_id']))
+        conn.commit()
+        cursor .execute("INSERT INTO manager (id,manager_name) VALUES (%s,%s)",(new_data["id"],new_data["username"]))
         conn.commit()
         return jsonify(message="Updated")
       
